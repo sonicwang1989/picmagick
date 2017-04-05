@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
+				xmlns:s="library://ns.adobe.com/flex/spark"
+				xmlns:mx="library://ns.adobe.com/flex/mx"
+				xmlns:local="*"
+				creationComplete="init()" layout="absolute">
+	<fx:Script>
+		<![CDATA[
+			import flash.system.Security;
+			
+			import mx.controls.Alert;
+			import mx.controls.Label;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			
+			import spark.components.TitleWindow;
+			
+			import picmagick.event.SaveToLocalEvent;
+			import picmagick.event.SaveToServerEvent;
+			import picmagick.utils.ImageIO;
+			
+			Security.allowDomain("*");
+			Security.allowInsecureDomain("*");
+			
+			//public static var as3_jpeg_wrapper:Object = (new CLibInit).init(); // JPEG encoder, imported from as3_jpeg_wrapper.swc
+			[Bindable] private var _dialog:Dialog = new Dialog; // popup dialog window
+			private var _process:Process=new Process;
+			private var _imageIO:ImageIO = new ImageIO(beginLoad,imageLoading,endLoad, imageLoaded, imageSaved, ioError,onError); // image IO utility
+			
+			private function init():void {
+				_dialog.addEventListener("confirmSaveClicked", function (event:Event):void { confirmSave();});
+				_dialog.addEventListener("inputUrlClicked", function (event:Event):void { loadImageUrl();});
+				_dialog.addEventListener("saveToLocalClicked", function (event:SaveToLocalEvent):void { saveToLocalClicked(event); });
+				_dialog.addEventListener("discardClicked", function (event:Event):void { discardClicked(); });
+				_dialog.addEventListener("saveToServerClicked", function (event:SaveToServerEvent):void { saveToServerClicked(event); });
+				addChild(_dialog);
+				removeChild(_dialog);
+				initJavaScriptInterface();
+				_imageIO.ProxyService="http://www.iguide.net/services/proxy.asmx/DownLoad";
+				_imageIO.ServerUrl="http://localhost:17656/iguide-dev/services/Handler.ashx";
+				_imageIO.Domain="iguide.net";
+				_imageIO.addEventListener("BeginUploadEvent",beginUploadToServer);
+				_imageIO.addEventListener("UploadFinishedEvent",uploadToServerFinished);
+				addEventListener(MouseEvent.MOUSE_WHEEL,function(event:MouseEvent):void{
+					if(event.delta>0){
+						imageCanvas.mouseZoom(true);
+						
+					}
+					else if(event.delta<0){
+						imageCanvas.mouseZoom(false);
+					}
+				});
+			}
+			
+			// (event handler) load button clicked
+			private function loadClicked():void {
+				if (imageCanvas.saved) _imageIO.loadImage();
+				else {
+					_dialog.toSavePhoto();
+					_dialog.LoadMode=1;
+					PopUpManager.addPopUp(_dialog, this, true);
+					PopUpManager.centerPopUp(_dialog);
+				}
+			}
+			
+			//(event handler) show input image url panel
+			protected function loadFromUrlClicked():void{
+				if(imageCanvas.saved){
+					_dialog.toInputUrl();
+					PopUpManager.addPopUp(_dialog, this, true);
+					PopUpManager.centerPopUp(_dialog);
+				}
+				else{
+					_dialog.toSavePhoto();
+					_dialog.LoadMode=2;
+					PopUpManager.addPopUp(_dialog, this, true);
+					PopUpManager.centerPopUp(_dialog);
+				}
+			}
+			
+			// (event handler) load image from url button clicked
+			private function loadImageUrl():void{
+				var url:String=_dialog.UserInputImageUrl;
+				_imageIO.loadImageFromUrl(url);
+			}
+			
+			/*
+			 *save to local
+			*/
+			
+			//(event handler) save image to local button clicked
+			private function saveImageToLocalClicked():void{
+				_dialog.toSetQuality();
+				_dialog.SaveMode=1;
+				_dialog.setSaveType(_imageIO.FileType);
+				PopUpManager.addPopUp(_dialog, this, true);
+				PopUpManager.centerPopUp(_dialog);
+			}
+			
+			// (event handler) save button clicked
+			private function saveToLocalClicked(event:SaveToLocalEvent):void {
+				var bitmapData:BitmapData = imageCanvas.bitmapData;
+				_imageIO.FileType=event.FileType;
+				_imageIO.Quality=event.Quality;
+				_imageIO.saveImage(bitmapData);
+			}
+			
+			/*
+			*save to server
+			*/
+			//(event handler) save image to server button clicked
+			private function saveImageToServerClicked():void{
+				_dialog.toSetQuality();
+				_dialog.SaveMode=2;
+				_dialog.setSaveType(_imageIO.FileType);
+				PopUpManager.addPopUp(_dialog, this, true);
+				PopUpManager.centerPopUp(_dialog);
+			}
+			
+			private function saveToServerClicked(event:SaveToServerEvent):void{
+				_imageIO.FileType=event.FileType;
+				_imageIO.Quality=event.Quality;
+				_imageIO.saveImageToServer(imageCanvas.bitmapData);
+			}
+			
+			/*
+			 *image load event handler 
+			*/
+			
+			//(event handler) begin load image
+			private function beginLoad(event:Event):void
+			{
+				PopUpManager.addPopUp(_process, this, true);
+				PopUpManager.centerPopUp(_process);
+			}
+			
+			//(event handler) loading image
+			private function imageLoading(event:ProgressEvent):void{
+				var bl:int=event.bytesLoaded;
+				var bt:int=event.bytesTotal;
+				var p:int=bl*100/bt;
+				_process.setProcess(p);
+			}
+			
+			//(event handler) load image complete
+			private function endLoad(event:Event):void{
+				_process.hide();
+			}
+			
+			 private function beginUploadToServer(event:Event):void
+			{
+				_dialog.toBusy();
+				PopUpManager.addPopUp(_dialog, this, true);
+				PopUpManager.centerPopUp(_dialog);
+			}
+			
+			private function uploadToServerFinished(event:Event):void
+			{
+				PopUpManager.removePopUp(_dialog);
+			}
+			
+			// (event handler) image is loaded
+			private function imageLoaded(bitmapData:BitmapData):void {
+				try
+				{
+					imageCanvas.loadImage(bitmapData);
+					saveToServer.enabled=true;
+					saveToLocal.enabled = true;
+					effects.enabled = true;
+					basics.enabled = true;
+					effects.resetView();
+					basics.resetView();	
+				} 
+				catch(error:Error) {
+					Alert.show(error.message,"Message",Alert.OK);	
+				}
+			}
+			
+			private function imageSaved(result:Object):void{
+				imageCanvas.saved=true;
+				var win:TitleWindow=new TitleWindow();
+				var lab:Label=new Label();
+				lab.text="Saved Success";
+				win.addElement(lab);
+				win.addEventListener(CloseEvent.CLOSE,function():void{
+					PopUpManager.removePopUp(win);
+				});
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+				var timer:Timer=new Timer(1000,1);
+				timer.addEventListener(TimerEvent.TIMER,function():void{
+					try
+					{
+						PopUpManager.removePopUp(win);	
+					} 
+					catch(error:Error) {}
+				});
+				timer.start();
+				if(ExternalInterface.available){
+					ExternalInterface.call("onSavedCall",result);
+				}
+			}
+			
+			// (event handler)  confirm save image 
+			private function confirmSave():void {
+				_dialog.toSetQuality();
+				_dialog.setSaveType(_imageIO.FileType);
+				PopUpManager.addPopUp(_dialog, this, true);
+				PopUpManager.centerPopUp(_dialog);
+			}
+			
+			private function discardClicked():void{
+				if(_dialog.LoadMode==1){
+					_imageIO.loadImage();
+				}
+				else if(_dialog.LoadMode==2){
+					_dialog.toInputUrl();
+					PopUpManager.addPopUp(_dialog, this, true);
+					PopUpManager.centerPopUp(_dialog);
+				}
+			}
+
+			// (event handler) io error occured
+			private function ioError(event:IOErrorEvent):void {
+				var e:IOErrorEvent=event;
+				_dialog.toIoError();
+				PopUpManager.addPopUp(_dialog, this, true);
+				PopUpManager.centerPopUp(_dialog);
+			}
+			
+			// (event handler) on error occured
+			private function onError(error:Error):void{
+				Alert.show(error.message,"Error",Alert.OK);				
+			}
+			
+			// imageCanvas init
+			private function imageCanvasCreationComplete():void {
+				basics.imageCanvas = imageCanvas;
+				effects.imageCanvas = imageCanvas;
+				imageCanvas.canvas.layers.addEventListener("selectComplete", basics.selectComplete);
+				imageCanvas.canvas.layers.addEventListener("colorPicked", basics.colorPicked);
+			}
+			
+			// (event handler) undo finished
+			private function undoComplete():void {
+				basics.resetView(false);
+				effects.resetView();
+			}
+			
+			//init javascript script interface
+			private function initJavaScriptInterface():void
+			{
+				var timer:Timer=new Timer(500);
+				timer.addEventListener(TimerEvent.TIMER,registerEvent);
+				timer.start();
+			}
+			
+			//(event handler) register javascript interface
+			private function registerEvent(event:TimerEvent):void
+			{
+				try
+				{
+					if(ExternalInterface.available)
+					{
+						ExternalInterface.addCallback("setServerUrl",function(serverUrl:String,proxyUrl:String,domain:String):void{
+							_imageIO.ServerUrl=serverUrl;
+							_imageIO.ProxyService=proxyUrl;
+							_imageIO.Domain=domain;
+						});
+						ExternalInterface.addCallback("editImage",function(imgUrl:String):void{
+							if(imageCanvas.saved) _imageIO.loadImageFromUrl(imgUrl);
+							else{
+								_dialog.toSavePhoto();
+								PopUpManager.addPopUp(_dialog, this, true);
+								PopUpManager.centerPopUp(_dialog);
+							}
+						});
+						ExternalInterface.addCallback("close",function():void{
+							//clear memory
+						});
+						ExternalInterface.call("onloadCompleted");
+						var timer:Timer=event.target as Timer;
+						timer.stop();
+					}
+				} 
+				catch(error:Error) 
+				{
+					Alert.show(error.message+ "Register script failed. Please try it again.");
+				}
+			}
+			
+			protected function quit(event:MouseEvent):void
+			{
+				if(ExternalInterface.available){
+					ExternalInterface.call("onEditorClosed");
+				}
+			}
+			
+			protected function aboutclickHandler(event:MouseEvent):void
+			{
+				_dialog.toAbout();
+				PopUpManager.addPopUp(_dialog, this, true);
+				PopUpManager.centerPopUp(_dialog);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<mx:ViewStack id="vsLeft" left="0" top="50" bottom="0" width="250">
+		<mx:VBox paddingBottom="20" paddingLeft="20" paddingRight="20" paddingTop="20"
+				 verticalGap="20" backgroundColor="#dee4ea" borderStyle="solid">
+			<mx:Panel width="100%" layout="absolute"
+					  title="@Resource(bundle='locale', key='panel_basics')">
+				<local:Basics id="basics" left="10" right="10" top="10" bottom="10" width="100%"
+							  changeControl="effects.resetView()" dialog="{_dialog}" enabled="false"
+							  resizeToContent="true"/>
+			</mx:Panel>
+			<mx:Panel width="100%" layout="absolute"
+					  title="@Resource(bundle='locale', key='panel_effects')">
+				<local:Effects id="effects" left="10" right="10" top="10" bottom="10" width="100%"
+							   changeControl="basics.resetView()" enabled="false"
+							   resizeToContent="true"/>
+			</mx:Panel>
+		</mx:VBox>
+	</mx:ViewStack>
+	<mx:ViewStack id="vsRight" left="250" right="0" top="50" bottom="0">
+		<mx:Canvas width="100%" height="100%">
+			<local:ImageCanvas id="imageCanvas" width="100%" height="100%"
+							   creationComplete="imageCanvasCreationComplete()"
+							   undoComplete="undoComplete()"/>
+		</mx:Canvas>
+	</mx:ViewStack>
+	<mx:ApplicationControlBar left="0" right="0" top="0" height="52" cornerRadius="0"
+							  fillAlphas="[1, 1]" fillColors="[#FFFFFF, #d5d5d5]">
+		<mx:Button id="load" label="@Resource(bundle='locale', key='menu_load_image')"
+				   click="loadClicked()"/>
+		<mx:Button id="loadFromUrl" label="@Resource(bundle='locale', key='menu_load_image_url')"
+				   click="loadFromUrlClicked()"/>
+		<mx:Button id="saveToLocal" label="@Resource(bundle='locale', key='menu_save_image')"
+				   click="saveImageToLocalClicked();" enabled="false"/>
+		<mx:Button id="saveToServer" label="@Resource(bundle='locale', key='menu_save_image_server')"
+				   click="saveImageToServerClicked()" enabled="false"/>
+		<mx:Button label="@Resource(bundle='locale', key='menu_quit')"   click="quit(event)"/>
+		<mx:Button label="@Resource(bundle='locale', key='menu_about')" click="aboutclickHandler(event)"/>
+	</mx:ApplicationControlBar>
+	<mx:Text right="20" top="14" buttonMode="true"
+			 click="navigateToURL(new URLRequest('http://www.iguide.net/'), '_blank')"
+			 mouseChildren="false" text="@Resource(bundle='locale', key='menu_powered_by')" 
+			 useHandCursor="true" fontSize="16" />
+</mx:Application>

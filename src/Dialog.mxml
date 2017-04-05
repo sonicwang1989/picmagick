@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009"
+		   xmlns:s="library://ns.adobe.com/flex/spark"
+		   xmlns:mx="library://ns.adobe.com/flex/mx"
+		   backgroundColor="#FFFFFF" borderStyle="solid" cornerRadius="10">
+	<fx:Metadata>
+		[Event(name="confirmSaveClicked", type="flash.events.Event")]
+		[Event(name="inputUrlClicked", type="flash.events.Event")]
+		[Event(name="saveToLocalClicked", type="flash.events.Event")]
+		[Event(name="discardClicked", type="flash.events.Event")]
+		[Event(name="processCanceled", type="flash.events.Event")]
+		[Event(name="saveToServerClicked",type="flash.events.Event")]
+	</fx:Metadata>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.net.navigateToURL;
+			
+			import mx.controls.Alert;
+			import mx.events.SliderEvent;
+			import mx.managers.PopUpManager;
+			
+			import picmagick.event.SaveEvent;
+			import picmagick.event.SaveToLocalEvent;
+			import picmagick.event.SaveToServerEvent;
+			
+			/*1=load from local , 2 load from server*/
+			private var _loadMode:int=1;
+			/*1=save to local , 2 to save to server*/
+			private var _saveMode:int=1;
+			
+			public function get LoadMode():int{
+				return _loadMode;
+			}
+			
+			public function set LoadMode(mode:int):void{
+				_loadMode=mode;
+			}
+			
+			public function get SaveMode():int{
+				return _saveMode;
+			}
+			
+			public function set SaveMode(mode:int):void{
+				 _saveMode=mode;
+				 savePosition.selectedValue=mode;
+			}
+			
+			// set dialog to save photo
+			public function toSavePhoto():void {
+				viewStack.selectedChild = savePhoto;
+			}
+			
+			public function toInputUrl():void{
+				viewStack.selectedChild=inputImageUrl;
+			}
+			
+			public function toSetQuality():void{
+				viewStack.selectedChild = setImageProperty;
+			}
+			
+			// set dialog to indicate io error
+			public function toIoError():void {
+				viewStack.selectedChild = ioError;
+			}
+			
+			// set dialog to processing
+			public function toBusy():void {
+				viewStack.selectedChild = busy;
+			}
+			
+			//set diglog to about
+			public function toAbout():void{
+				viewStack.selectedChild=about;
+			}
+			
+			public function setSaveType(type:String):void{
+				try
+				{
+					fileSaveType.selectedValue=type;
+				} 
+				catch(error:Error) 
+				{
+					fileSaveType.selectedValue="jpg";	
+				}
+			}
+			
+			// (event handler) save button clicked in save photo dialog
+			private function saveClicked():void {
+				PopUpManager.removePopUp(this);
+				dispatchEvent(new Event("confirmSaveClicked"));
+			}
+			
+			// (event handler) discard button clicked in save photo dialog
+			private function discardClicked():void {
+				PopUpManager.removePopUp(this);
+				dispatchEvent(new Event("discardClicked"));
+			}
+			
+			// (event handler) cancel button clicked in save photo dialog
+			private function cancelClicked():void {
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function saveButtonClicked():void{
+				PopUpManager.removePopUp(this);
+				var q:int=quality.value;
+				var event:SaveEvent;
+				if(this.SaveMode==1)
+				{
+					event=new SaveToLocalEvent("saveToLocalClicked");
+				}
+				else if(this.SaveMode==2)
+				{
+					event=new SaveToServerEvent("saveToServerClicked");
+				}
+				event.FileType=String(fileSaveType.selection.value);
+				event.Quality=q;
+				dispatchEvent(event);
+			}
+			
+			protected function quality_changeHandler(event:SliderEvent):void
+			{
+				var q:int=event.value;
+				qualityText.text=q+"%";
+			}
+			
+			public function get UserInputImageUrl():String{
+				return imageUrl.text;
+			}
+			
+			protected function okClicked(event:MouseEvent):void
+			{
+				if(imageUrl.text.length==0){
+					Alert.show("Please input the image url at first!","Message",Alert.OK);
+				}
+				else{
+					this.cancelClicked();
+					dispatchEvent(new Event("inputUrlClicked"));	
+				}
+			}
+			
+			protected function savePosition_changeHandler(event:Event):void
+			{
+				if(savePosition.selectedValue=="1"){
+					_saveMode=1;
+				}
+				else{
+					_saveMode=2;
+				}
+			}
+			
+			protected function imageUrl_clickHandler(event:MouseEvent):void
+			{
+				if(imageUrl.text!=""){
+					var len:int=imageUrl.text.length;
+					imageUrl.setSelection(0,len);
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:ViewStack id="viewStack" creationPolicy="all" paddingBottom="20" paddingLeft="50"
+				  paddingRight="50" paddingTop="20" resizeToContent="true">
+		<mx:VBox id="savePhoto" horizontalAlign="center">
+			<mx:Text width="300" fontSize="14"
+					 text="@Resource(bundle='locale', key='dialog_not_saved')"/>
+			<mx:Spacer height="20"/>
+			<mx:ControlBar paddingBottom="0" paddingTop="0">
+				<mx:Button width="80" label="@Resource(bundle='locale', key='common_save')"
+						   click="saveClicked()"/>
+				<mx:Button width="80" label="@Resource(bundle='locale', key='common_discard')"
+						   click="discardClicked()"/>
+				<mx:Button width="80" label="@Resource(bundle='locale', key='common_cancel')"
+						   click="cancelClicked()"/>
+			</mx:ControlBar>
+		</mx:VBox>
+		<mx:Box id="inputImageUrl" horizontalAlign="center">
+			<mx:Label width="350" text="Image Url:"/>
+				<mx:TextInput id="imageUrl" width="350" text="http://c0836982.cdn.cloudfiles.rackspacecloud.com/522885_c23d6d6f-7a2f-4fde-a77a-7bc6fbc59e6b.JPG" click="imageUrl_clickHandler(event)"/>
+			<mx:ControlBar paddingBottom="5" paddingTop="15">
+				<mx:Button width="80" label="@Resource(bundle='locale', key='common_ok')"
+						   click="okClicked(event)"/>
+				<mx:Button width="80" label="@Resource(bundle='locale', key='common_cancel')"
+						   click="cancelClicked()"/>	
+			</mx:ControlBar>
+		</mx:Box>
+		
+ 		<mx:Box id="setImageProperty" direction="vertical" horizontalAlign="center">
+			<mx:HBox width="280">
+				<mx:Label text="Save this image to"/>
+				<mx:RadioButtonGroup id="savePosition" change="savePosition_changeHandler(event)"/>
+				<mx:RadioButton id="toLocal" label="to local" groupName="savePosition" value="1"/>
+				<mx:RadioButton id="toServer" label="to server" groupName="savePosition" value="2"/>
+			</mx:HBox>
+			<mx:HBox width="280">
+				<mx:Label width="70" paddingTop="5"
+						  text="@Resource(bundle='locale', key='common_save_quality')"
+						  textAlign="left"/>		
+				<mx:HSlider id="quality" width="150" change="quality_changeHandler(event)"
+							liveDragging="true" maximum="100" minimum="10" showDataTip="true"
+							snapInterval="5" tickValues="[10,20,30,40,50,60,70,80,90,100]"
+							value="100"/>
+				<mx:Label id="qualityText" width="40" paddingTop="5" text="100%"/>
+			</mx:HBox>
+			<mx:HBox width="280">
+				<mx:Label width="70" text="@Resource(bundle='locale', key='common_save_type')"
+						  textAlign="left"/>
+				<mx:RadioButtonGroup id="fileSaveType" />
+				<mx:RadioButton label="JPEG/JPG" groupName="fileSaveType" value="jpg"/>
+				<mx:RadioButton label="PNG" groupName="fileSaveType" value="png"/>
+			</mx:HBox>
+			<mx:ControlBar paddingBottom="0" paddingTop="20">
+				<mx:Button width="80" label="@Resource(bundle='locale', key='common_save')"
+						   click="saveButtonClicked()"/>
+				<mx:Button width="80" label="@Resource(bundle='locale', key='common_cancel')"
+						   click="cancelClicked()"/>
+			</mx:ControlBar>
+		</mx:Box>
+		
+		<mx:VBox id="ioError" horizontalAlign="center">
+			<mx:Text width="300" fontSize="14" text="@Resource(bundle='locale', key='dialog_error')"/>
+			<mx:Spacer height="20"/>
+			<mx:Button width="80" label="@Resource(bundle='locale', key='common_ok')"
+					   click="cancelClicked()"/>
+		</mx:VBox>
+		
+		<mx:VBox id="busy" horizontalAlign="center" verticalAlign="middle">
+			<mx:Text width="300" fontSize="14"
+					 text="@Resource(bundle='locale', key='dialog_processing')" textAlign="center"/>
+		</mx:VBox>
+		<mx:Box id="about" horizontalAlign="center" verticalAlign="middle">
+			<mx:Text text="PE Editor is a flash image editor that base on picmagick open source project and other open source software." 
+					  width="330"/>
+			
+			<mx:HBox width="330" textAlign="left">
+				<mx:LinkButton fontSize="15" label="picmagick" click="navigateToURL(new URLRequest('http://www.picmagick.com/'), '_blank')"
+							   textAlign="left" color="blue" textDecoration="underline"/>	
+			</mx:HBox>
+			<mx:Label text="Power by Justin" textAlign="right" width="330"/>
+			<mx:Button width="80" label="@Resource(bundle='locale', key='common_ok')" click="cancelClicked()"/>
+		</mx:Box>
+	</mx:ViewStack>
+</mx:Canvas>
